@@ -1,0 +1,115 @@
+﻿@page "/"
+@using UploadFile.Interfaces
+@using UploadFile.Service
+@using UploadFile.Data
+t
+@inject IBlobStorage BlobStorage 
+
+<PageTitle>Index</PageTitle>
+@if (warninngMessage.Length > 0)
+{
+    <div class="alert alert-warning">
+        <strong>Warning!</strong> @warninngMessage.
+    </div>
+}
+
+<h4>File Upload (Azure Blob Storage)</h4>
+<div class="row">
+    <div class="col-sm-6">
+        <label>
+            <InputFile class="form-control" accept=".docx" disabled="@fileLoading" OnChange="@OnInputFileChange"single/>
+        </label>
+        @if (fileLoading)
+        {
+            <i class="fa fa-refresh"></i>
+            <span>Loading...</span>
+        }
+        <br>
+
+
+        <label for="email">
+            Email:
+            <InputText id="email" class="form-control" @bind-Value="@Email" placeholder="Email"/>
+        </label>
+
+    </div>
+    <div class="col-sm-2">
+        <button type="button" disabled="@fileLoading" class="btn btn-primary" @onclick="OnUploadSubmit">
+            Upload File
+        </button>
+    </div>
+</div>
+@if (displayMessage.Length > 0)
+{
+    <div class="alert alert-success">
+        <strong>Success!</strong> @displayMessage.
+    </div>
+}
+
+
+
+@code {
+    readonly EmailService emailService = new();
+
+
+    private string warninngMessage = "";
+    private string displayMessage = "";
+    private List<IBrowserFile> loadedFiles = new();
+   
+    private bool fileLoading;
+    string Message = "No file(s) selected";
+    IReadOnlyList<IBrowserFile> selectedFiles;
+    private readonly List<FileModel> fileUploadViewModels = new();
+
+    public string Email { get; set; }
+    private void OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        selectedFiles = e.GetMultipleFiles();
+        Message = $"{selectedFiles.Count} file(s) selected";
+        StateHasChanged();
+    }
+
+    private async void OnUploadSubmit()
+    {
+        fileLoading = true;
+        foreach (var file in selectedFiles)
+        {
+            try
+            {
+                var trustedFileNameForFileStorage = file.Name;
+                var blobUrl = await BlobStorage.UploadFilesAsync(trustedFileNameForFileStorage, file.ContentType, file.OpenReadStream(20971520));
+                if (blobUrl != null)
+                {
+                    var fileUploadViewModel = new FileModel
+                    {
+                        FileName = trustedFileNameForFileStorage,
+                        FileStorageUrl = blobUrl,
+                        ContentType = file.ContentType
+                    };
+
+                    fileUploadViewModels.Add(fileUploadViewModel);
+                    displayMessage = trustedFileNameForFileStorage + " Uploaded!!";
+                    emailService.SendEmailNotification(Email, file.Name);
+                    displayMessage = Email + " SENT!!";
+                }
+            }
+            catch (Exception ex)
+            {
+                warninngMessage = "Something went wrong while uploading the file or sending the email: " + ex.Message;
+            }
+        }
+
+        fileLoading = false;
+        StateHasChanged();
+    }
+
+}
+
+
+
+
+
+
+
+
+}
